@@ -346,7 +346,6 @@ dependencies:
     - appdirs==1.4.3
     - ase==3.18.1
     - asteval==0.9.14
-    - diffpy-mpdf==1.0.0
     - diffpy-srfit==3.0.0
     - dill==0.2.9
     - emcee==2.2.1
