@@ -240,7 +240,6 @@ dependencies:
   - pylint=2.4.3=py37_0
   - pyobjcryst=2.1.0=py37h9b883b0_0
   - pyodbc=4.0.27=py37he1b5a44_0
-  - pyopengl=3.1.3b2=py_1
   - pyopenssl=19.0.0=py37_0
   - pyparsing=2.4.2=py_0
   - pypubsub=4.0.3=py_0
