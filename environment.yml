@@ -124,5 +124,6 @@ dependencies:
     - diffpy-srfit==3.0.0
     - diffpy-structure==3.0.1
     - diffpy-utils==3.0.0
+    - pyjokes
 prefix: /home/rjk/anaconda3/envs/diffpy
 
