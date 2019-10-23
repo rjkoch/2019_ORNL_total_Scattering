@@ -1,4 +1,11 @@
-# Tutorial 2, Refining PDF from nanocrystalline platinum to obtain
+#!/usr/bin/env python
+###################################
+#                                 #
+# File coded by: Robert J. Koch   #
+#                                 #
+###################################
+#
+# Example 2, Refining PDF from nanocrystalline platinum to obtain
 # an estimate for the nanoparticle (NP) size, as well as the atomic structure.
 #
 # This Diffpy-CMI script will carry out a structural refinement of a measured
@@ -6,22 +13,20 @@
 # found in tutorial 1, and requires that the output files of this tutorial
 # are present in a specific location.
 #
-# Comments in this tutorial will be less verbose than in tutorial 1. 
+# Comments in this Example will be less verbose than in Example 1.
 #
 # Import packages that we will need
 from pathlib import Path
-import sys
 import yaml
+import sys
+sys.path.append(str(Path().absolute().parent.parent.parent))
 
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import numpy as np
-from diffpy.srfit.fitbase import FitContribution, FitRecipe
+
 from diffpy.srfit.fitbase import FitResults
-from diffpy.srfit.fitbase import Profile
-from diffpy.srfit.pdf import PDFParser, PDFGenerator
 from diffpy.structure.parsers import getParser
 from scipy.optimize import least_squares
+from cmi_demos.utils.helpers import makerecipe
+from cmi_demos.utils.helpers import plotresults
 
 ############### Config ##############################
 # Give a file path to where your pdf (.gr) and (.cif) files are located.
@@ -35,8 +40,6 @@ FIT_ID = "Fit_Pt_NP"
 GR_NAME = "Pt-nanoparticles.gr"
 CIF_NAME = "Pt.cif"
 
-# Specify the space-group.
-SPACEGROUP = "Fm-3m"
 
 ######## Experimental PDF Config ######################
 # Specify the min, max, and step r-values of the PDF (that we want to fit over)
@@ -58,11 +61,6 @@ DELTA2_I = 4
 # For the NP case, we also provide an initial guess
 # for the average crystallite size, in Angstroms.
 PSIZE_I = 40
-
-# If you'd like to run this in parallel (multi-CPUs):
-# Ensure that the "psutil" python package is installed in your environment
-# Switch this to "True"
-RUN_PARALLEL = False
 
 # First, let's read the fit results from the Ni fit.
 # We parse out the refined values of Q_damp and Q_broad,
@@ -114,185 +112,6 @@ else:
     # ...and we exit the script with code "1," meaning abnormal termination
     sys.exit(1)
 
-
-######## Functions that will carry out the refinement ##################
-# Make the Fit Recipe object, similar to the Ni example.
-def makerecipe(structure_file, data_file):
-    """
-    Basic function for creating and properly constraining a fit recipe.
-
-    Parameters
-    ----------
-    structure_file : Path object or str
-        Path to *.cif file, containing a structural model to use to fit the PDF data.
-    data_file : Path object or str
-        Path to data file containing PDF data to fit against.
-
-    Returns
-    -------
-    recipe : FitRecipe object
-        An initialized fit recipe object, ready for fitting.
-    """
-    ######## Profile Section ##################
-    # Create a Profile object for the experimental dataset.
-    # This handles all details about the dataset.
-    # We also tell this profile the range and mesh of points in r-space.
-    profile = Profile()
-    parser = PDFParser()
-    parser.parseFile(data_file)
-    profile.loadParsedData(parser)
-    profile.setCalculationRange(xmin=PDF_RMIN, xmax=PDF_RMAX, dx=PDF_RSTEP)
-
-
-
-    p_cif = getParser('cif')
-    structure = p_cif.parseFile(str(structure_file))
-    space_group = p_cif.spacegroup.short_name
-
-    # Make sure we allow for anisotropy
-    structure.anisotropy = True
-
-    ######## PDF Generator Section ##################
-    # Create a PDF Generator object for a periodic structure model.
-    generator_crystal1 = PDFGenerator("G1")
-    generator_crystal1.setStructure(structure, periodic=True)
-
-    # Initialize the instrument parameters, Q_damp and Q_broad, and
-    # assign Q_max and Q_min.
-    generator_crystal1.qdamp.value = QDAMP_I
-    generator_crystal1.qbroad.value = QBROAD_I
-    generator_crystal1.setQmax(QMAX)
-    generator_crystal1.setQmin(QMIN)
-
-    # If you have a multi-core computer (you probably do),
-    # you can run your refinement in parallel!
-    # This requires that you set "RUN_PARALLEL" to "True" above.
-    # The psutil python package is also required for the bit of
-    # code below, where we make sure not to overload your CPUs.
-    if RUN_PARALLEL:
-        import psutil
-        import multiprocessing
-        syst_cores = multiprocessing.cpu_count()
-        cpu_percent = psutil.cpu_percent()
-        avail_cores = np.floor((100 - cpu_percent) / (100.0 / syst_cores))
-        ncpu = int(np.max([1, avail_cores]))
-        generator_crystal1.parallel(ncpu)
-
-    ######## Fit Contribution Section ##################
-    # Create a Fit Contribution object.
-    contribution = FitContribution("crystal")
-    contribution.addProfileGenerator(generator_crystal1)
-
-    # Set an equation, based on your PDF generators. Here we add an extra layer
-    # of complexity, incorporating "f" int our equation. This new term
-    # incorporates damping to our PDF to model the effect of finite crystallite size.
-    # In this case we use a function which models a spherical NP.
-    from diffpy.srfit.pdf.characteristicfunctions import sphericalCF
-    contribution.registerFunction(sphericalCF, name="f")
-    contribution.setEquation("s1*G1*f")
-
-    # Set the Fit Contribution profile to the Profile object.
-    contribution.setProfile(profile, xname="r")
-
-    ######## Recipe Section ##################
-    # Create the Fit Recipe object that holds all the details of the fit.
-    recipe = FitRecipe()
-    recipe.addContribution(contribution)
-
-
-    # Add, initialize, and tag variables in the Fit Recipe object.
-    # In this case we also add psize, which is the NP size.
-    recipe.addVar(contribution.s1, SCALE_I, tag="scale")
-    recipe.addVar(contribution.psize, PSIZE_I, tag="psize")
-
-    # Use the srfit function constrainAsSpaceGroup to constrain
-    # the lattice and ADP parameters according to the Fm-3m space group.
-    from diffpy.srfit.structure import constrainAsSpaceGroup
-    spacegroupparams = constrainAsSpaceGroup(generator_crystal1.phase,
-                                             space_group)
-    for par in spacegroupparams.latpars:
-        recipe.addVar(par,
-                      value=CUBICLAT_I,
-                      fixed=False,
-                      name="fcc_Lat",
-                      tag="lat")
-
-    for par in spacegroupparams.adppars:
-        recipe.addVar(par,
-                      value=UISO_I,
-                      fixed=False,
-                      name="fcc_ADP",
-                      tag="adp")
-
-    # Add delta, but not instrumental parameters to Fit Recipe.
-    # The instrumental parameters will remain fixed at values obtained from
-    # the Ni calibrant in our previous example. As we have not added them through
-    # recipe.addVar, they cannot be refined.
-    recipe.addVar(generator_crystal1.delta2,
-                  name="Pt_Delta2",
-                  value=DELTA2_I,
-                  tag="d2")
-
-    return recipe
-
-    # End of function
-
-
-def plotresults(recipe, figname):
-    """
-    Creates plots of the fitted PDF and residual, and writes them to disk
-    as *.pdf files.
-
-    Parameters
-    ----------
-    recipe :    The optimized Fit Recipe object containing the PDF data
-                we wish to plot
-    figname :   string, the location and name of the figure file to create
-
-    Returns
-    ----------
-    None
-    """
-    r = recipe.crystal.profile.x
-
-    g = recipe.crystal.profile.y
-    gcalc = recipe.crystal.profile.ycalc
-    diffzero = -0.65 * max(g) * np.ones_like(g)
-    diff = g - gcalc + diffzero
-
-    mpl.rcParams.update(mpl.rcParamsDefault)
-    plt.style.use(str(Path().absolute().parent / "utils" / "billinge.mplstyle"))
-
-    fig, ax1 = plt.subplots(1, 1)
-
-    ax1.plot(r, g, ls="None",
-             marker="o", ms=5, mew=0.2,
-             mfc="None", label="G(r) Data")
-
-    ax1.plot(r, gcalc, lw=1.3, label="G(r) Fit")
-
-    ax1.plot(r, diff, lw=1.2, label="G(r) diff")
-
-    ax1.plot(r, diffzero, lw=1.0, ls="--", c="black")
-
-    ax1.set_xlabel("r($\mathrm{\AA}$)")
-    ax1.set_ylabel("G($\mathrm{\AA}$$^{-2}$)")
-    ax1.tick_params(axis="both",
-                    which="major",
-                    top=True,
-                    right=True)
-
-    ax1.set_xlim(PDF_RMIN, PDF_RMAX)
-    ax1.legend()
-
-    plt.tight_layout()
-    plt.show()
-    fig.savefig(figname.parent / (figname.name + ".pdf"),
-                format="pdf")
-
-    # End of function
-
-
 def main():
     """
     This will run by default when the file is executed using
@@ -337,8 +156,73 @@ def main():
 
     # Initialize the Fit Recipe by giving it this diffpy structure
     # as well as the path to the data file.
+
+    p_cif = getParser('cif')
+    structure = p_cif.parseFile(str(cif_file))
+    space_group = p_cif.spacegroup.short_name
+
+    
+
+    # Initialize the Fit Recipe by giving it this diffpy structure
+    # as well as the path to the data file.
     recipe = makerecipe(cif_file, data)
-    recipe.fix("all")
+
+    
+
+    recipe.crystal.profile.setCalculationRange(xmin=PDF_RMIN, xmax=PDF_RMAX, dx=PDF_RSTEP)
+
+    # Add, initialize, and tag variables in the Fit Recipe object.
+    # In this case we also add psize, which is the NP size.
+    recipe.addVar(recipe.crystal.s1, SCALE_I, tag="scale")
+
+    # Set an equation, based on your PDF generators. Here we add an extra layer
+    # of complexity, incorporating "f" int our equation. This new term
+    # incorporates damping to our PDF to model the effect of finite crystallite size.
+    # In this case we use a function which models a spherical NP.
+    from diffpy.srfit.pdf.characteristicfunctions import sphericalCF
+    recipe.crystal.registerFunction(sphericalCF, name="f")
+    recipe.crystal.setEquation("s1*G1*f")
+
+    recipe.addVar(recipe.crystal.psize, PSIZE_I, tag="psize")
+
+    # Use the srfit function constrainAsSpaceGroup to constrain
+    # the lattice and ADP parameters according to the Fm-3m space group.
+    from diffpy.srfit.structure import constrainAsSpaceGroup
+    spacegroupparams = constrainAsSpaceGroup(recipe.crystal.G1.phase,
+                                             space_group)
+
+    # Initialize the instrument parameters, Q_damp and Q_broad, and
+    # assign Q_max and Q_min.
+    recipe.crystal.G1.qdamp.value = QDAMP_I
+    recipe.crystal.G1.qbroad.value = QBROAD_I
+    recipe.crystal.G1.setQmax(QMAX)
+    recipe.crystal.G1.setQmin(QMIN)
+
+
+    for par in spacegroupparams.latpars:
+        recipe.addVar(par,
+                      value=CUBICLAT_I,
+                      fixed=False,
+                      name="fcc_Lat",
+                      tag="lat")
+
+    for par in spacegroupparams.adppars:
+        recipe.addVar(par,
+                      value=UISO_I,
+                      fixed=False,
+                      name="fcc_ADP",
+                      tag="adp")
+
+    # Add delta, but not instrumental parameters to Fit Recipe.
+    # The instrumental parameters will remain fixed at values obtained from
+    # the Ni calibrant in our previous example. As we have not added them through
+    # recipe.addVar, they cannot be refined.
+    recipe.addVar(recipe.crystal.G1.delta2,
+                  name="Pt_Delta2",
+                  value=DELTA2_I,
+                  tag="d2")
+
+
 
     # Tell the Fit Recipe we want to write the maximum amount of
     # information to the terminal during fitting.
@@ -346,12 +230,15 @@ def main():
 
     refine_params = ["scale", "lat", "psize", "adp", "d2", "all"]
 
+    recipe.fix("all")
+
     for params in refine_params:
         recipe.free(params)
         print(f"\n****\nFitting {recipe.getNames()} against "
               f"{GR_NAME} with {CIF_NAME}\n")
-        input("\nPress enter to continue...")
         least_squares(recipe.residual, recipe.values, x_scale="jac")
+
+    
 
     # We use the savetxt method of the profile to write a text file
     # containing the measured and fitted PDF to disk.
@@ -383,7 +270,9 @@ def main():
     # The file is named based on the basename we created earlier, and
     # written to the figdir directory.
     plotresults(recipe, figdir / basename)
-    # plt.ion()
+
+
+    
 
     # Let make a dictionary to hold our results. This way make reloading the
     # fit parameters easier later
@@ -405,6 +294,8 @@ def main():
     with open(basename + ".yml", 'w') as outfile:
         yaml.safe_dump(refined_dict, outfile)
 
+
+    
 
     # End of function
 
