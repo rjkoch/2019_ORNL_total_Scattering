@@ -23,6 +23,7 @@ def plotresults(recipe, figname):
     ----------
     None
     """
+    figname = Path(figname)
     r = recipe.crystal.profile.x
 
     g = recipe.crystal.profile.y

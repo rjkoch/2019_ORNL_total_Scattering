@@ -15,12 +15,14 @@
 # Import packages that we will need.
 from pathlib import Path
 import yaml
+import sys
+sys.path.append(str(Path().absolute().parent.parent.parent))
 
 from diffpy.srfit.fitbase import FitResults
 from diffpy.structure.parsers import getParser
 from scipy.optimize import least_squares
-from helpers import makerecipe
-from helpers import plotresults
+from cmi_demos.utils.helpers import makerecipe
+from cmi_demos.utils.helpers import plotresults
 
 ############### Config ##############################
 # Give a file path to where your pdf (.gr) and (.cif) files are located.
