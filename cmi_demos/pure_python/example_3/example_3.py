@@ -165,7 +165,6 @@ def main():
         if structure_string not in refined_dict:
             print(f"\n{structure_string} IS NOT in dictionary!\n")
             # Nest a dictionary inside "refined_dict" with a key defined by "structure_string"
-            # Nest a dictionary inside "refined_dict" with a key defined by "stru_type"
             refined_dict[structure_string] = dict()
 
             # This is just for ease of coding/readability
@@ -176,8 +175,10 @@ def main():
             sg_dict = refined_dict[structure_string]
             done = True
 
+        # Where will we work? here!
         work_dir = base_dir / structure_string
 
+        # Make our folders!
         for folder in folders:
             new_folder = work_dir / folder
             if not new_folder.exists():
@@ -190,11 +191,9 @@ def main():
         # the recipe, and we will replace this data before refining.
         recipe = makerecipe(cif, data_files[0])
 
+        # Let's set the calculation range!
         recipe.crystal.profile.setCalculationRange(xmin=PDF_RMIN, xmax=PDF_RMAX, dx=PDF_RSTEP)
 
-        p_cif = getParser('cif')
-        structure = p_cif.parseFile(str(cif))
-        space_group = p_cif.spacegroup.short_name
 
         # Initialize the instrument parameters, Q_damp and Q_broad, and
         # assign Q_max and Q_min.

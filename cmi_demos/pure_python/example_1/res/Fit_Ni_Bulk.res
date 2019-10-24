@@ -1,4 +1,4 @@
-Results written: Wed Oct 23 12:59:40 2019
+Results written: Thu Oct 24 09:42:00 2019
 produced by rjk
 crystal_HF.
 

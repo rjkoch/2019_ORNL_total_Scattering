@@ -165,29 +165,30 @@ def main():
     # We loop over all the structures we considered
     # In this case it's just two.
     for structure in refined_dict.keys():
-        first_key = next(iter(refined_dict["Fmmm"].keys()))
-        thermal_names = [key for key in refined_dict[structure][first_key].keys() if "U" in key]
+        if "I4_on_mmm" in structure:
+            first_key = next(iter(refined_dict["I4_on_mmm"].keys()))
+            thermal_names = [key for key in refined_dict[structure][first_key].keys() if "U" in key]
 
-        for thermal in thermal_names:
+            for thermal in thermal_names:
 
-            # We get the x values we want to plot against
-            # Here, it's the temperature.
-            xs = [temp for temp in refined_dict[structure].keys()]
+                # We get the x values we want to plot against
+                # Here, it's the temperature.
+                xs = [temp for temp in refined_dict[structure].keys()]
 
-            # We get the y values we want to plot
-            # Here, it's defined by the string in "var_name"
-            # above, or the thermal parameter.
-            ys = [refined_dict[structure][temp][thermal]["value"] for
-                  temp in refined_dict[structure].keys()]
+                # We get the y values we want to plot
+                # Here, it's defined by the string in "var_name"
+                # above, or the thermal parameter.
+                ys = [refined_dict[structure][temp][thermal]["value"] for
+                      temp in refined_dict[structure].keys()]
 
-            # In case they aren't sorted, we sort by temperature (x).
-            xs, ys = zip(*sorted(zip(xs, ys)))
+                # In case they aren't sorted, we sort by temperature (x).
+                xs, ys = zip(*sorted(zip(xs, ys)))
 
-            # Plot the data, using the structure type as the label.
-            ax.plot(xs,
-                    ys,
-                    '-o',
-                    label=structure + "_" + thermal)
+                # Plot the data, using the structure type as the label.
+                ax.plot(xs,
+                        ys,
+                        '-o',
+                        label=f"{structure} {thermal}")
 
 
 
@@ -197,7 +198,7 @@ def main():
     ax.set_ylabel(r"Thermal parameter ($\rm \AA^2$)")
 
     # Outside the loop, we create a legend.
-    plt.legend(fontsize=10, ncol=2)
+    plt.legend(fontsize=9, ncol=3)
 
     # And we show the plot.
     plt.show()
@@ -237,7 +238,6 @@ def main():
     ax.set_xlabel('Temperature (K)')
     ax.set_ylabel(r"Orthorhombicity (%)")
 
-    plt.legend()
     plt.show()
 
     fig.savefig(T_SRIES_PLOT_DIR / 'orthorhombicity_T.pdf',

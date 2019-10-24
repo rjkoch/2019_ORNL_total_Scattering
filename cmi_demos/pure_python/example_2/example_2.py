@@ -16,11 +16,12 @@
 # Comments in this Example will be less verbose than in Example 1.
 #
 # Import packages that we will need
-from pathlib import Path
-import yaml
 import sys
-sys.path.append(str(Path().absolute().parent.parent.parent))
+from pathlib import Path
 
+import yaml
+
+sys.path.append(str(Path().absolute().parent.parent.parent))
 
 from diffpy.srfit.fitbase import FitResults
 from diffpy.structure.parsers import getParser
@@ -39,7 +40,6 @@ FIT_ID = "Fit_Pt_NP"
 # Specify the names of the input PDF and cif files.
 GR_NAME = "Pt-nanoparticles.gr"
 CIF_NAME = "Pt.cif"
-
 
 ######## Experimental PDF Config ######################
 # Specify the min, max, and step r-values of the PDF (that we want to fit over)
@@ -73,33 +73,31 @@ NIBASENAME = "Fit_Ni_Bulk"
 
 STANDARD_RES_FILE = (STANDARD_DIR / (NIBASENAME + ".yml"))
 
-
 # First, check of the file even exists
 if STANDARD_RES_FILE.exists():
 
     # If it exists, let's open it and load the dictionary
     with open(STANDARD_RES_FILE, 'r') as infile:
-        refined_dict = yaml.safe_load(infile)
+        ni_dict = yaml.safe_load(infile)
 
     # If we find either of these strings in the dictionary, we load it
-    if "Calib_Qbroad" in refined_dict:
+    if "Calib_Qbroad" in ni_dict:
         # ... we grab the value.
-        QBROAD_I = refined_dict["Calib_Qbroad"]["value"]
+        QBROAD_I = ni_dict["Calib_Qbroad"]["value"]
 
-    if "Calib_Qdamp" in refined_dict:
+    if "Calib_Qdamp" in ni_dict:
         # ... we grab the value.
-        QDAMP_I = refined_dict["Calib_Qdamp"]["value"]
+        QDAMP_I = ni_dict["Calib_Qdamp"]["value"]
 
     # If we don't find these strings, something is wrong...            
-    if "Calib_Qbroad" not in refined_dict or "Calib_Qdamp" not in refined_dict:
-        
+    if "Calib_Qbroad" not in ni_dict or "Calib_Qdamp" not in ni_dict:
         # ... so we print a warning to the terminal...
         print(f"\nWe did not find instrumental parameters in"
               f"{STANDARD_RES_FILE}. Please make sure tutorial 1 has been")
 
         # ...and we exit the script with code "1," meaning abnormal termination
         sys.exit(1)
-        
+
 # If the fit result file does not exist, something is wrong.
 else:
 
@@ -111,6 +109,7 @@ else:
 
     # ...and we exit the script with code "1," meaning abnormal termination
     sys.exit(1)
+
 
 def main():
     """
@@ -138,13 +137,12 @@ def main():
 
         # If the folder does not exist...
         if not folder.exists():
-
             # ...then we create it.
             folder.mkdir()
 
     # Let the user know what fit we are running by printing to terminal.
     basename = FIT_ID
-    print(basename)
+    print(f"\n{basename}\n")
 
     # Establish the full location of the data.
     data = DPATH / GR_NAME
@@ -161,14 +159,11 @@ def main():
     structure = p_cif.parseFile(str(cif_file))
     space_group = p_cif.spacegroup.short_name
 
-    
-
     # Initialize the Fit Recipe by giving it this diffpy structure
     # as well as the path to the data file.
     recipe = makerecipe(cif_file, data)
 
-    
-
+    # Let's set the calculation range!
     recipe.crystal.profile.setCalculationRange(xmin=PDF_RMIN, xmax=PDF_RMAX, dx=PDF_RSTEP)
 
     # Add, initialize, and tag variables in the Fit Recipe object.
@@ -185,48 +180,46 @@ def main():
 
     recipe.addVar(recipe.crystal.psize, PSIZE_I, tag="psize")
 
+    # Initialize the instrument parameters, Q_damp and Q_broad, and
+    # assign Q_max and Q_min.
+    # Note, here we do not add the qdamp and qbroad parameters to the fit!!!
+    # They are fixed here, because we refined them in the Ni standard fit!
+    recipe.crystal.G1.qdamp.value = QDAMP_I
+    recipe.crystal.G1.qbroad.value = QBROAD_I
+    recipe.crystal.G1.setQmax(QMAX)
+    recipe.crystal.G1.setQmin(QMIN)
+
     # Use the srfit function constrainAsSpaceGroup to constrain
     # the lattice and ADP parameters according to the Fm-3m space group.
     from diffpy.srfit.structure import constrainAsSpaceGroup
     spacegroupparams = constrainAsSpaceGroup(recipe.crystal.G1.phase,
                                              space_group)
 
-    # Initialize the instrument parameters, Q_damp and Q_broad, and
-    # assign Q_max and Q_min.
-    recipe.crystal.G1.qdamp.value = QDAMP_I
-    recipe.crystal.G1.qbroad.value = QBROAD_I
-    recipe.crystal.G1.setQmax(QMAX)
-    recipe.crystal.G1.setQmin(QMIN)
-
-
+    # Add and initialize delta, the lattice parameter, and a thermal parameter,
+    # but not instrumental parameters to Fit Recipe.
+    # The instrumental parameters will remain fixed at values obtained from
+    # the Ni calibrant in our previous example. As we have not added them through
+    # recipe.addVar, they cannot be refined.
     for par in spacegroupparams.latpars:
         recipe.addVar(par,
                       value=CUBICLAT_I,
-                      fixed=False,
                       name="fcc_Lat",
                       tag="lat")
 
     for par in spacegroupparams.adppars:
         recipe.addVar(par,
                       value=UISO_I,
-                      fixed=False,
                       name="fcc_ADP",
                       tag="adp")
 
-    # Add delta, but not instrumental parameters to Fit Recipe.
-    # The instrumental parameters will remain fixed at values obtained from
-    # the Ni calibrant in our previous example. As we have not added them through
-    # recipe.addVar, they cannot be refined.
     recipe.addVar(recipe.crystal.G1.delta2,
                   name="Pt_Delta2",
                   value=DELTA2_I,
                   tag="d2")
 
-
-
     # Tell the Fit Recipe we want to write the maximum amount of
     # information to the terminal during fitting.
-    recipe.fithooks[0].verbose = 3
+    recipe.fithooks[0].verbose = 0
 
     refine_params = ["scale", "lat", "psize", "adp", "d2", "all"]
 
@@ -237,8 +230,6 @@ def main():
         print(f"\n****\nFitting {recipe.getNames()} against "
               f"{GR_NAME} with {CIF_NAME}\n")
         least_squares(recipe.residual, recipe.values, x_scale="jac")
-
-    
 
     # We use the savetxt method of the profile to write a text file
     # containing the measured and fitted PDF to disk.
@@ -271,16 +262,12 @@ def main():
     # written to the figdir directory.
     plotresults(recipe, figdir / basename)
 
-
-    
-
     # Let make a dictionary to hold our results. This way make reloading the
     # fit parameters easier later
     refined_dict = dict()
 
     refined_dict['rw'] = rw.item()
 
-    recipe.free("all")
     # We loop over the variable names, the variable values, and the variable uncertainties (esd)
     for name, val, unc in zip(res.varnames, res.varvals, res.varunc):
         # We store the refined value for this variable using the "value" key.
@@ -293,9 +280,6 @@ def main():
 
     with open(basename + ".yml", 'w') as outfile:
         yaml.safe_dump(refined_dict, outfile)
-
-
-    
 
     # End of function
 

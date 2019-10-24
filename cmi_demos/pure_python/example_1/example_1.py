@@ -13,9 +13,11 @@
 # look at an unknown sample (in example 2).
 #
 # Import packages that we will need.
-from pathlib import Path
-import yaml
 import sys
+from pathlib import Path
+
+import yaml
+
 sys.path.append(str(Path().absolute().parent.parent.parent))
 
 from diffpy.srfit.fitbase import FitResults
@@ -61,6 +63,7 @@ DELTA2_I = 2
 QDAMP_I = 0.04
 QBROAD_I = 0.02
 
+
 def main():
     """
     This will run by default when the file is executed using
@@ -87,14 +90,12 @@ def main():
 
         # If the folder does not exist...
         if not folder.exists():
-
             # ...then we create it.
             folder.mkdir()
 
-
     # Let the user know what fit we are running by printing to terminal.
     basename = FIT_ID
-    print(basename)
+    print(f"\n{basename}\n")
 
     # Establish the full location of the data.
     data = DPATH / GR_NAME
@@ -112,31 +113,21 @@ def main():
     # as well as the path to the data file.
     recipe = makerecipe(cif_file, data)
 
+    # We first want to add a scale parameter to our fit recipe!
+    recipe.addVar(recipe.crystal.s1, SCALE_I, tag="scale")
+
+    # Let's set the calculation range!
     recipe.crystal.profile.setCalculationRange(xmin=PDF_RMIN, xmax=PDF_RMAX, dx=PDF_RSTEP)
 
-
-    # Initialize the instrument parameters, Q_damp and Q_broad, and
     # assign Q_max and Q_min, all part of the PDF Generator object.
     # It's possible that the PDFParse function we used above
     # already parsed out ths information, but in case it didn't, we set it
     # explicitly again here.
-    # All parameter objects can have their value assigned using the
-    # below ".value = " syntax.
-    recipe.crystal.G1.qdamp.value = QDAMP_I
-    recipe.crystal.G1.qbroad.value = QBROAD_I
     recipe.crystal.G1.setQmax(QMAX)
     recipe.crystal.G1.setQmin(QMIN)
 
-
-    # Add a variable to the Fit Recipe object, initialize the variables
-    # with some value, and tag it with a string. Here we add the scale
-    # parameter from the Fit Contribution. The ".addVar" method can be
-    # used generally to add variables to the Fit Recipe.
-    recipe.addVar(recipe.crystal.s1, SCALE_I, tag="scale")
-
-    # Add delta and instrumental parameters to Fit Recipe.
-    # These parameters are contained as part of the PDF Generator object
-    # and initialized with values as defined in the opening of the script.
+    # Initialize and add the instrument parameters, Q_damp and Q_broad, and
+    # delta and instrumental parameters to Fit Recipe.
     # We give them unique names, and tag them with our choice of relevant strings.
     recipe.addVar(recipe.crystal.G1.delta2,
                   name="Ni_Delta2",
@@ -144,15 +135,14 @@ def main():
                   tag="d2")
 
     recipe.addVar(recipe.crystal.G1.qdamp,
-                  fixed=False,
                   name="Calib_Qdamp",
+                  value=QDAMP_I,
                   tag="inst")
 
     recipe.addVar(recipe.crystal.G1.qbroad,
-                  fixed=False,
                   name="Calib_Qbroad",
+                  value=QBROAD_I,
                   tag="inst")
-
 
     # Configure some additional fit variables pertaining to symmetry.
     # We can use the srfit function constrainAsSpaceGroup to constrain
@@ -174,7 +164,6 @@ def main():
     for par in spacegroupparams.latpars:
         recipe.addVar(par,
                       value=CUBICLAT_I,
-                      fixed=False,
                       name="fcc_Lat",
                       tag="lat")
 
@@ -184,10 +173,8 @@ def main():
     for par in spacegroupparams.adppars:
         recipe.addVar(par,
                       value=UISO_I,
-                      fixed=False,
                       name="fcc_ADP",
                       tag="adp")
-
 
     # Tell the Fit Recipe we want to write the maximum amount of
     # information to the terminal during fitting.
@@ -215,7 +202,6 @@ def main():
         recipe.free(params)
         print(f"\n****\nFitting {recipe.getNames()} against "
               f"{GR_NAME} with {CIF_NAME}\n")
-        input("\nPress enter to continue...")
         least_squares(recipe.residual, recipe.values, x_scale="jac")
 
     # We use the savetxt method of the profile to write a text file
@@ -248,7 +234,6 @@ def main():
     # The file is named based on the basename we created earlier, and
     # written to the figdir directory.
     plotresults(recipe, figdir / basename)
-    # plt.ion()
 
     # Let make a dictionary to hold our results. This way make reloading the
     # fit parameters easier later
@@ -267,6 +252,7 @@ def main():
         refined_dict[name]["value"] = val.item()
         refined_dict[name]["uncert"] = unc.item()
 
+    # Finally, let's write our dictionary to a yaml file!
     with open(basename + ".yml", 'w') as outfile:
         yaml.safe_dump(refined_dict, outfile)
 
