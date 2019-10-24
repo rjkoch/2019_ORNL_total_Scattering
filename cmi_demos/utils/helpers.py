@@ -1,6 +1,11 @@
+#!/usr/bin/env python
+###################################
+#                                 #
+# File coded by: Robert J. Koch   #
+#                                 #
+###################################
 import numpy as np
 from pathlib import Path
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 from diffpy.srfit.fitbase import FitContribution, FitRecipe
@@ -43,8 +48,8 @@ def plotresults(recipe, figname):
 
     ax1.plot(r, diffzero, lw=1.0, ls="--", c="black")
 
-    ax1.set_xlabel("r($\mathrm{\AA}$)")
-    ax1.set_ylabel("G($\mathrm{\AA}$$^{-2}$)")
+    ax1.set_xlabel("r ($\mathrm{\AA}$)")
+    ax1.set_ylabel("G ($\mathrm{\AA}$$^{-2}$)")
     ax1.tick_params(axis="both",
                     which="major",
                     top=True,

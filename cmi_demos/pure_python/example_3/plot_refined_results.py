@@ -1,21 +1,30 @@
-# Tutorial 3 Refining PDFs from SrFe2As2 to investigate phase transformation
+#!/usr/bin/env python
+###################################
+#                                 #
+# File coded by: Robert J. Koch   #
+#                                 #
+###################################
 #
-# This python script will help yo parse out the refined information.
-# Tutorial 3 needs to be run before running this script.
+# Example 3 Refining PDFs from SrFe2As2 to investigate phase transformation
+#
+# This python script will help you parse out the refined information.
+# Example 3 needs to be run before running this script.
 #
 # Import packages that we will need.
-import os
+from pathlib import Path
 import yaml
 import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
 
+WORK_DIR = Path()
+
 # This is the same as in the refinement file.
 FIT_ID_BASE = "Fit_SrFe2As2_"
 
 # This is where we will save the plots we make here.
-T_SRIES_PLOT_DIR = "T_series_plots"
+T_SRIES_PLOT_DIR = WORK_DIR / "T_series_plots"
 
 
 def main():
@@ -31,29 +40,24 @@ def main():
     ----------
     None
     """
-
+    yaml_file = WORK_DIR / (FIT_ID_BASE + "refined_params.yml")
     # We now read a dictionary from a file, if it exists
     # This .yaml file should have been created after running tutorial 3.
-    if os.path.exists(FIT_ID_BASE + "refined_params.yml"):
-        with open(FIT_ID_BASE + "refined_params.yml", 'r') as infile:
+    if yaml_file.exists():
+        with open(yaml_file, 'r') as infile:
             refined_dict = yaml.safe_load(infile)
 
     # If the file doesn't exist, print a message to the terminal and exit
-    elif not os.path.exists(FIT_ID_BASE + "refined_params.yml"):
-        print(FIT_ID_BASE + "refined_params.yml does not exist.")
+    elif not yaml_file.exists():
+        print(f"{yaml_file.name} does not exist!")
 
         # If we dont find the yaml file, we have nothing to do
         # so we exit.
         sys.exit(1)
 
     # Make a place to put the saved plots if one doesn't exist.
-    if not os.path.exists(T_SRIES_PLOT_DIR):
-        os.makedirs(T_SRIES_PLOT_DIR)
-
-    # Use a standard style format.
-    plt.style.use(os.path.join(os.pardir,
-                               "utils",
-                               "billinge.mplstyle"))
+    if not T_SRIES_PLOT_DIR.exists():
+        T_SRIES_PLOT_DIR.mkdir()
 
     # Close any plots if they're open already.
     plt.clf()
@@ -76,7 +80,7 @@ def main():
         # We get the y values we want to plot
         # Here, it's defined by the string in "var_name"
         # above, or the c lattice parameter.
-        ys = [refined_dict[structure][temp][var_name] for
+        ys = [refined_dict[structure][temp][var_name]["value"] for
                temp in refined_dict[structure].keys()]
 
         # In case they aren't sorted, we sort by temperature (x).
@@ -86,7 +90,7 @@ def main():
         ax.plot(xs,
                 ys,
                 '-o',
-                label=structure)
+                label=f"{structure}")
 
     # Outside the loop, we label the axes.
     ax.set_xlabel('Temperature (K)')
@@ -98,7 +102,7 @@ def main():
     # And we show the plot.
     plt.show()
 
-    fig.savefig(os.path.join(T_SRIES_PLOT_DIR, 'full_' + var_name + '_T.pdf'),
+    fig.savefig(T_SRIES_PLOT_DIR / ('full_' + var_name + '_T.pdf'),
                 format='pdf')
 
     # Close any plots if they're open already
@@ -145,7 +149,7 @@ def main():
     # And we show the plot.
     plt.show()
 
-    fig.savefig(os.path.join(T_SRIES_PLOT_DIR, 'full_' + var_name + '_T.pdf'),
+    fig.savefig(T_SRIES_PLOT_DIR / ('full_' + var_name + '_T.pdf'),
                 format='pdf')
 
     # Close any plots if they're open already
@@ -161,7 +165,7 @@ def main():
     # We loop over all the structures we considered
     # In this case it's just two.
     for structure in refined_dict.keys():
-        first_key = next(iter(refined_dict["orthorhombic"].keys()))
+        first_key = next(iter(refined_dict["Fmmm"].keys()))
         thermal_names = [key for key in refined_dict[structure][first_key].keys() if "U" in key]
 
         for thermal in thermal_names:
@@ -173,7 +177,7 @@ def main():
             # We get the y values we want to plot
             # Here, it's defined by the string in "var_name"
             # above, or the thermal parameter.
-            ys = [refined_dict[structure][temp][thermal] for
+            ys = [refined_dict[structure][temp][thermal]["value"] for
                   temp in refined_dict[structure].keys()]
 
             # In case they aren't sorted, we sort by temperature (x).
@@ -190,7 +194,7 @@ def main():
 
     # Outside the loop, we label the axes.
     ax.set_xlabel('Temperature (K)')
-    ax.set_ylabel(r"Thermal paramete ($\rm \AA^2$)")
+    ax.set_ylabel(r"Thermal parameter ($\rm \AA^2$)")
 
     # Outside the loop, we create a legend.
     plt.legend(fontsize=10, ncol=2)
@@ -198,8 +202,7 @@ def main():
     # And we show the plot.
     plt.show()
 
-
-    fig.savefig(os.path.join(T_SRIES_PLOT_DIR, 'full_thermals_T.pdf'),
+    fig.savefig(T_SRIES_PLOT_DIR/ 'full_thermals_T.pdf',
                 format='pdf')
 
     # Close any plots if they're open already
@@ -209,20 +212,20 @@ def main():
     # Create a subplot axis
     fig, ax = plt.subplots(1, 1)
 
-    structure = "orthorhombic"
+    structure = "Fmmm"
 
     var_name = "a"
-    a_params = [refined_dict[structure][temp][var_name]
+    a_params = [refined_dict[structure][temp][var_name]["value"]
                 for temp in refined_dict[structure].keys()]
 
     var_name = "b"
-    b_params = [refined_dict[structure][temp][var_name]
+    b_params = [refined_dict[structure][temp][var_name]["value"]
                 for temp in refined_dict[structure].keys()]
 
 
     xs = [temp for temp in refined_dict[structure].keys()]
 
-    ys = [(a-b)/(0.5*(a+b)) for
+    ys = [100*(a-b)/(0.5*(a+b)) for
           a, b in zip(a_params, b_params)]
 
     xs, ys = zip(*sorted(zip(xs, ys)))
@@ -232,14 +235,13 @@ def main():
             '-o')
 
     ax.set_xlabel('Temperature (K)')
-    ax.set_ylabel(r"Orthorhombicity ($\rm \AA$)")
+    ax.set_ylabel(r"Orthorhombicity (%)")
 
     plt.legend()
     plt.show()
 
-    fig.savefig(os.path.join(T_SRIES_PLOT_DIR, 'orthorhombicity_T.pdf'),
+    fig.savefig(T_SRIES_PLOT_DIR / 'orthorhombicity_T.pdf',
                 format='pdf')
-
 
     # End of function
 

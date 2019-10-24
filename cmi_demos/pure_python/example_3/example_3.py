@@ -1,4 +1,11 @@
-# Tutorial 3 Refining PDFs from SrFe2As2 to investigate phase transformation
+#!/usr/bin/env python
+###################################
+#                                 #
+# File coded by: Robert J. Koch   #
+#                                 #
+###################################
+#
+# Example 3 Refining PDFs from SrFe2As2 to investigate phase transformation
 #
 # This Diffpy-CMI script will carry out a structural refinement of a measured
 # PDF from SrFe2As2.
@@ -6,16 +13,15 @@
 # Import packages that we will need.
 from pathlib import Path
 import yaml
+import sys
+sys.path.append(str(Path().absolute().parent.parent.parent))
 
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import numpy as np
-from diffpy.srfit.fitbase import FitContribution, FitRecipe
-from diffpy.srfit.fitbase import FitResults
-from diffpy.srfit.fitbase import Profile
-from diffpy.srfit.pdf import PDFParser, PDFGenerator
+from diffpy.srfit.fitbase import FitResults, Profile
+from diffpy.srfit.pdf import PDFParser
 from diffpy.structure.parsers import getParser
 from scipy.optimize import least_squares
+from cmi_demos.utils.helpers import makerecipe
+from cmi_demos.utils.helpers import plotresults
 
 ############### Config ##############################
 # Give a file path to where your pdf (.gr) and (.cif) files are located.
@@ -37,7 +43,9 @@ GR_NAME_BASE = "SrFe2As2_"
 CIF_NAME_BASE = GR_NAME_BASE
 
 # This will allow us to skip things we've already done
-SKIP_DONE = False
+SKIP_DONE = True
+
+REPLOT_DONE = True
 
 ######## Experimental PDF Config ######################
 # Specify the min, max, and step r-values of the PDF (that we want to fit over)
@@ -59,191 +67,6 @@ DELTA1_I = 1.6
 # separate calibration step. These are hard-coded here.
 QDAMP_I = 0.0349
 QBROAD_I = 0.0176
-
-# If you'd like to run this in parallel (multi-CPUs):
-# Ensure that the "psutil" package is installed in your environment
-# Switch this to "True"
-RUN_PARALLEL = False
-
-# During the fitting, we will be plotting interavtively.
-# Normally, this will block the execution of the script until the plot is closed.
-# If we'd like to run this unattended, we probably don't want this default behavior.
-# this boolean will control whether we block the script during plotting.
-BLOCK_ON_PLOT = False
-
-
-######## Functions that will carry out the refinement ##################
-# Make the FitRecipe object. This has an additional argument "sg,"
-# where we can pass in a string containing the space group of the structure.
-# We'd like to make this function flexible enough to consider
-# different space groups, so this is important.
-def makerecipe(structure_file, data_file):
-    """
-    Basic function for creating and properly constraining a fit recipe.
-
-    Parameters
-    ----------
-    structure_file : Path object or str
-        Path to *.cif file, containing a structural model to use to fit the PDF data.
-    data_file : Path object or str
-        Path to data file containing PDF data to fit against.
-
-    Returns
-    -------
-    recipe : FitRecipe object
-        An initialized fit recipe object, ready for fitting.
-    """
-    ######## Profile Section ##################
-    # Create a Profile object for the experimental dataset.
-    # This handles all details about the dataset.
-    # We also tell this profile the range and mesh of points in r-space.
-    profile = Profile()
-    parser = PDFParser()
-    parser.parseFile(data_file)
-    profile.loadParsedData(parser)
-    profile.setCalculationRange(xmin=PDF_RMIN, xmax=PDF_RMAX, dx=PDF_RSTEP)
-
-
-
-    p_cif = getParser('cif')
-    structure = p_cif.parseFile(str(structure_file))
-    space_group = p_cif.spacegroup.short_name
-
-    # Make sure we allow for anisotropy
-    structure.anisotropy = True
-
-    ######## PDF Generator Section ##################
-    # Create a PDF Generator object for a periodic structure model.
-    generator_crystal1 = PDFGenerator("G1")
-    generator_crystal1.setStructure(structure, periodic=True)
-
-    # Initialize the instrument parameters, Q_damp and Q_broad, and
-    # assign Q_max and Q_min.
-    generator_crystal1.qdamp.value = QDAMP_I
-    generator_crystal1.qbroad.value = QBROAD_I
-    generator_crystal1.setQmax(QMAX)
-    generator_crystal1.setQmin(QMIN)
-
-    # If you have a multi-core computer (you probably do),
-    # you can run your refinement in parallel!
-    # This requires that you set "RUN_PARALLEL" to "True" above.
-    # The psutil python package is also required for the bit of
-    # code below, where we make sure not to overload your CPUs.
-    if RUN_PARALLEL:
-        import psutil
-        import multiprocessing
-        syst_cores = multiprocessing.cpu_count()
-        cpu_percent = psutil.cpu_percent()
-        avail_cores = np.floor((100 - cpu_percent) / (100.0 / syst_cores))
-        ncpu = int(np.max([1, avail_cores]))
-        generator_crystal1.parallel(ncpu)
-
-    ######## Fit Contribution Section ##################
-    # Create a Fit Contribution object.
-    contribution = FitContribution("crystal")
-    contribution.addProfileGenerator(generator_crystal1)
-
-    # Set the Fit Contribution profile to the Profile object.
-    contribution.setProfile(profile, xname="r")
-
-    # Set an equation, based on your PDF generators. This is
-    # again a simple case, with only a scale and a single PDF generator.
-    contribution.setEquation("s1*G1")
-
-    ######## Recipe Section ##################
-    # Create the Fit Recipe object that holds all the details of the fit.
-    recipe = FitRecipe()
-    recipe.addContribution(contribution)
-
-    # Add, initialize, and tag the scale variable.
-    recipe.addVar(contribution.s1, SCALE_I, tag="scale")
-
-    # Use the srfit function constrainAsSpaceGroup to constrain
-    # the lattice and ADP parameters according to the space group setting,
-    # in this case, contained in the function argument "sg"
-    #
-    from diffpy.srfit.structure import constrainAsSpaceGroup
-
-    spacegroupparams = constrainAsSpaceGroup(generator_crystal1.phase,
-                                             space_group)
-
-    for par in spacegroupparams.latpars:
-        recipe.addVar(par, fixed=False, tag="lat")
-
-    for par in spacegroupparams.adppars:
-        recipe.addVar(par, fixed=False, tag="adp")
-
-    # Note: here we also can refine atomic coordinates.
-    # In our previous examples, all the atoms were on symmetry
-    # operators, so their positions could not be refined.
-    for par in spacegroupparams.xyzpars:
-        recipe.addVar(par, fixed=False, tag="xyz")
-
-    # Add delta, but not instrumental parameters to Fit Recipe.
-    recipe.addVar(generator_crystal1.delta2,
-                  name="Delta2",
-                  value=DELTA1_I,
-                  tag="d2")
-
-    # Return the Fit Recipe object to be optimized
-    return recipe
-
-    # End of function
-
-
-def plotresults(recipe, figname):
-    """
-    Creates plots of the fitted PDF and residual, and writes them to disk
-    as *.pdf files.
-
-    Parameters
-    ----------
-    recipe :    The optimized Fit Recipe object containing the PDF data
-                we wish to plot
-    figname :   string, the location and name of the figure file to create
-
-    Returns
-    ----------
-    None
-    """
-    r = recipe.crystal.profile.x
-
-    g = recipe.crystal.profile.y
-    gcalc = recipe.crystal.profile.ycalc
-    diffzero = -0.65 * max(g) * np.ones_like(g)
-    diff = g - gcalc + diffzero
-
-    mpl.rcParams.update(mpl.rcParamsDefault)
-    plt.style.use(str(Path().absolute().parent / "utils" / "billinge.mplstyle"))
-
-    fig, ax1 = plt.subplots(1, 1)
-
-    ax1.plot(r, g, ls="None",
-             marker="o", ms=5, mew=0.2,
-             mfc="None", label="G(r) Data")
-
-    ax1.plot(r, gcalc, lw=1.3, label="G(r) Fit")
-
-    ax1.plot(r, diff, lw=1.2, label="G(r) diff")
-
-    ax1.plot(r, diffzero, lw=1.0, ls="--", c="black")
-
-    ax1.set_xlabel("r($\mathrm{\AA}$)")
-    ax1.set_ylabel("G($\mathrm{\AA}$$^{-2}$)")
-    ax1.tick_params(axis="both",
-                    which="major",
-                    top=True,
-                    right=True)
-
-    ax1.set_xlim(PDF_RMIN, PDF_RMAX)
-    ax1.legend()
-
-    plt.tight_layout()
-    plt.show()
-    fig.savefig(figname.parent / (figname.name + ".pdf"),
-                format="pdf")
-
-    # End of function
 
 def main():
     """
@@ -269,7 +92,7 @@ def main():
     # Let's define our working directory.
     base_dir = Path()
 
-    yaml_file = base_dir / FIT_ID_BASE / "refined_params.yml"
+    yaml_file = base_dir / (FIT_ID_BASE + "refined_params.yml")
 
     # This is a bit different than what we've done before.
     # We are going to look at a set of temperatures, so we want
@@ -281,9 +104,6 @@ def main():
     # For every file we find, we will link it up with the data path
     data_files = list(DPATH.glob(f"*{GR_NAME_BASE}*.gr"))
 
-                  # We look at all the files in the "DPATH" directory...
-
-                 # ... that contain the string in "GR_NAME_BASE"
 
     # We now want to grab the temperature at which each file was measured.
     # We again use list comprehension, and we re-use the variable "temp"
@@ -316,15 +136,16 @@ def main():
     # For every file we find, we will link it up with the data path
     cif_files = list(DPATH.glob(f"*{CIF_NAME_BASE}*.cif"))
 
-                # We look at all the files in the "DPATH" directory.
-
-                # We only consider files that end with ".cif" ...
-
-                 # ... and that contain the string in "CIF_NAME_BASE"
-
     # We initialize and empty dictionary, where we will save all
     # the details of the refined parameters.
-    refined_dict = dict()
+    if yaml_file.exists():
+        print(f"\n{yaml_file.name} exists, loading!\n")
+        with open(yaml_file, 'r') as infile:
+            refined_dict = yaml.safe_load(infile)
+    else:
+        print(f"\n{yaml_file.name} does not exist, creating!\n")
+        refined_dict = dict()
+
 
     # We want to do a separate temperature series on each of the structures,
     # so we will use a loop on all the cif files we found.
@@ -352,6 +173,7 @@ def main():
             done = False
         elif structure_string in refined_dict:
             print(f"\n{structure_string} IS IN dictionary!\n")
+            sg_dict = refined_dict[structure_string]
             done = True
 
         work_dir = base_dir / structure_string
@@ -368,9 +190,52 @@ def main():
         # the recipe, and we will replace this data before refining.
         recipe = makerecipe(cif, data_files[0])
 
+        recipe.crystal.profile.setCalculationRange(xmin=PDF_RMIN, xmax=PDF_RMAX, dx=PDF_RSTEP)
+
+        p_cif = getParser('cif')
+        structure = p_cif.parseFile(str(cif))
+        space_group = p_cif.spacegroup.short_name
+
+        # Initialize the instrument parameters, Q_damp and Q_broad, and
+        # assign Q_max and Q_min.
+        recipe.crystal.G1.qdamp.value = QDAMP_I
+        recipe.crystal.G1.qbroad.value = QBROAD_I
+        recipe.crystal.G1.setQmax(QMAX)
+        recipe.crystal.G1.setQmin(QMIN)
+
+        # Add, initialize, and tag the scale variable.
+        recipe.addVar(recipe.crystal.s1, SCALE_I, tag="scale")
+
+        # Use the srfit function constrainAsSpaceGroup to constrain
+        # the lattice and ADP parameters according to the space group setting,
+        # in this case, contained in the function argument "sg"
+        #
+        from diffpy.srfit.structure import constrainAsSpaceGroup
+
+        spacegroupparams = constrainAsSpaceGroup(recipe.crystal.G1.phase,
+                                                 space_group)
+
+        for par in spacegroupparams.latpars:
+            recipe.addVar(par, fixed=False, tag="lat")
+
+        for par in spacegroupparams.adppars:
+            recipe.addVar(par, fixed=False, tag="adp")
+
+        # Note: here we also can refine atomic coordinates.
+        # In our previous examples, all the atoms were on symmetry
+        # operators, so their positions could not be refined.
+        for par in spacegroupparams.xyzpars:
+            recipe.addVar(par, fixed=False, tag="xyz")
+
+        # Add delta, but not instrumental parameters to Fit Recipe.
+        recipe.addVar(recipe.crystal.G1.delta2,
+                      name="Delta2",
+                      value=DELTA1_I,
+                      tag="d2")
+
         # Tell the Fit Recipe we want to write the maximum amount of
         # information to the terminal during fitting.
-        recipe.fithooks[0].verbose = 3
+        recipe.fithooks[0].verbose = 0
 
 
         # As we are doing a temperature series through a phase transition, we want to fit many
@@ -388,6 +253,7 @@ def main():
                 done = False
             elif temp in sg_dict:
                 print(f"\nT = {temp} K IS IN {structure_string} dictionary!\n")
+                temp_dict = sg_dict[temp]
                 done = True
 
             # We create a unique string to identify our fit,
@@ -456,7 +322,7 @@ def main():
                                   )
 
                     print("\nPolishing done\n")
-            if (done and not SKIP_DONE) or not done:
+            if (done and not SKIP_DONE) or not done or REPLOT_DONE:
                 print(f"\nStarting to write results for {basename}"
                       f" with structure {structure_string} at T = {temp} K\n")
                 # Print the fit results to the terminal.
