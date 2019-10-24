@@ -3,3 +3,6 @@
 /.ipynb_checkpoints
 .pyc
 __pychache__
+/__pychache__
+__pychache__/
+~
