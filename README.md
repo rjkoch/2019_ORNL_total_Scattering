@@ -7,8 +7,11 @@ This project is both a binder project, and a set of pure python files.
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/rjkoch/2019_ORNL_total_scattering/master)
 
 
-For running the pure python files locally on your machine, you will f
+For running the pure python files locally on your machine, you will
 first need to install the Diffpy-CMI packages.
+
+Otherwise, you can run them with **no additional software** installation
+in your browser using binder (link above).
 
 ## For installation of Diffpy-CMI in Unix based (Linux and Mac OS) systems
 
@@ -27,7 +30,7 @@ first need to install the Diffpy-CMI packages.
         
         `conda activate diffpy`
 
-3. Download and unzip these tutorial files to a meaningful directory.
+3. Download and unzip these example files to a meaningful directory.
     - Navigate to wherever you have placed the files using `cd /path/to/files`
 
 ## For installation of Diffpy-CMI in Windows systems
@@ -86,7 +89,7 @@ first need to install the Diffpy-CMI packages.
         
         `conda activate diffpy`
 
-7. Download and unzip these tutorial files to a meaningful directory.
+7. Download and unzip these example files to a meaningful directory.
     - Navigate to wherever you have placed the files using `cd /path/to/files`
     
     
@@ -97,19 +100,19 @@ https://www.virtualbox.org/
 Once this is installed, and the VM running, 
 follow the instructions above for Unix based installation.
 
-## Running the tutorials
+## Running the examples
 - Tutorials are meant to be run in order
 - The relevant files are python files, of the form *.py
 - Files contain extensive comments.
 - Open a Unix or WSL terminal, and activate the relevant environment with
     
     `conda activate diffpy` 
-- Navigate to a tutorial directory, for example, type `cd ./tutorial_1` for tutorial 1
-- A tutorial can be run  in one of two ways:
-    - Entering `python tutorial_1.py` directly in your terminal
+- Navigate to a example directory, for example, type `cd ./example_1` for example 1
+- A example can be run  in one of two ways:
+    - Entering `python example_1.py` directly in your terminal
     - In an IPython session:
         - Enter `ipython` in your terminal. This will start an interactive python interpreter.
-        - Enter `%run tutorial_1.py`
+        - Enter `%run example_1.py`
         
         
 ***When in doubt, ask!***
